@@ -88,7 +88,7 @@ export default function ExamSection() {
           (a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )
-        .filter((exam) => exam.status !== "active")
+        // .filter((exam) => exam.status !== "active")
         .map((exam) => (
           <Card key={exam.id} className="flex flex-col">
             <CardHeader>

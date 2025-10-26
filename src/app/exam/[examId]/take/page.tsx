@@ -22,38 +22,41 @@ import { useEffect, useState } from "react";
 type Answer = {
   id: number;
   text: string;
-  is_correct: boolean;
 };
 
 type Question = {
   id: number;
-  exam_id: number;
-  module: string;
   question_text: string;
   type: "mcq" | "numeric" | string;
   marks: number;
-  order: number;
-  created_at: string;
-  updated_at: string;
   answers?: Answer[];
   explanation?: string | null;
+  image_url?: string | null;
 };
 
-type ExamData = {
-  model_a: {
-    name: string;
-    questions: Question[];
-  };
-  model_b: {
-    name: string;
-    questions: Record<string, Question>;
-  };
-};
-
-type ApiResponse = {
+type ExamStartResponse = {
   status: string;
   message: string;
-  data: ExamData;
+  data: {
+    user_exam: {
+      id: number;
+      exam_id: number;
+      start_time: string;
+      end_time: string;
+      status: string;
+      total_questions: number;
+      models: {
+        model_a: {
+          name: string;
+          questions: Question[];
+        };
+        model_b: {
+          name: string;
+          questions: Question[];
+        };
+      };
+    };
+  };
 };
 
 export default function DynamicExam() {
@@ -65,6 +68,7 @@ export default function DynamicExam() {
   const [current, setCurrent] = useState(0);
   const [flagged, setFlagged] = useState<Set<number>>(new Set());
   const [showCalculator, setShowCalculator] = useState(false);
+  const [showHelpSheet, setHelpSheet] = useState(false);
   const [currentModule, setCurrentModule] = useState<
     "model_a" | "model_b" | "review_a"
   >("model_a");
@@ -108,7 +112,7 @@ export default function DynamicExam() {
 
     return {
       user_exam_id: userExamId,
-      has_cheated: false, // Will be overridden if needed
+      has_cheated: false,
       answers: answers,
     };
   };
@@ -122,9 +126,9 @@ export default function DynamicExam() {
     }
     const payload = {
       ...prepareAnswers(),
-      has_cheated: true, // Mark as cheated
+      has_cheated: true,
       Cheating_reason: isInFullscreen
-        ? " Student out the full screen"
+        ? "Student out the full screen"
         : "The student open another tab",
     };
     submitExamMutation.mutate(payload);
@@ -137,34 +141,13 @@ export default function DynamicExam() {
       isEnabled: examStarted,
     });
 
-  // Get exam details
-  const {
-    data: examData,
-    isLoading: detailsLoading,
-    isError: detailsError,
-  } = useQuery<ApiResponse>({
-    queryKey: ["examDetails", examId],
-    queryFn: () => apiClient.get(`/exams/one/${examId}`),
-  });
-
-  // Get questions based on current module
-  const modelAQuestions = examData?.data?.model_a?.questions || [];
-  const modelBQuestions = Object.values(
-    examData?.data?.model_b?.questions || {}
-  );
-
-  const questions =
-    currentModule === "model_a" || currentModule === "review_a"
-      ? modelAQuestions
-      : modelBQuestions;
-
-  // Enroll Mutation - first mutation
+  // Enroll Mutation
   const enrollMutation = useMutation({
     mutationFn: () => apiClient.post("/user-exams/enroll", { exam_id: examId }),
   });
 
-  // Start Exam Mutation - second mutation
-  const startExamMutation = useMutation({
+  // Start Exam Mutation - this now returns the questions
+  const startExamMutation = useMutation<ExamStartResponse, Error, number>({
     mutationFn: (userExamId: number) =>
       apiClient.post(`/user-exams/${userExamId}/start`, {
         exam_id: examId,
@@ -172,30 +155,48 @@ export default function DynamicExam() {
     onSuccess: (response) => {
       console.log("Start exam response:", response);
 
-      const initialTime = 35 * 60;
+      // Calculate time left based on start_time and end_time
+      const startTime = new Date(response.data.user_exam.start_time);
+      const endTime = new Date(response.data.user_exam.end_time);
+      const currentTime = new Date();
+
+      const remainingSeconds = Math.floor(
+        (endTime.getTime() - currentTime.getTime()) / 1000
+      );
+      const initialTime = Math.max(0, remainingSeconds);
+
       setTimeLeft(initialTime);
-      setExamStarted(true); // Enable proctoring
+      setExamStarted(true);
     },
     onError: (error) => {
       console.error("Start exam error:", error);
+      // Fallback to 35 minutes
       setTimeLeft(35 * 60);
       setExamStarted(true);
     },
   });
 
+  // Get exam questions from the start exam response
+  const modelAQuestions =
+    startExamMutation.data?.data?.user_exam?.models?.model_a?.questions || [];
+  const modelBQuestions =
+    startExamMutation.data?.data?.user_exam?.models?.model_b?.questions || [];
+
+  const questions =
+    currentModule === "model_a" || currentModule === "review_a"
+      ? modelAQuestions
+      : modelBQuestions;
+
+  // Initial enrollment and start
   useEffect(() => {
-    if (!detailsLoading && examData) {
+    if (examId && !userExamId) {
       enrollMutation.mutate(undefined, {
         onSuccess: (response) => {
-          // Extract user_exam_id from the first mutation's response
           const enrollUserExamId = response?.data?.user_exam_id;
-
           console.log("Enroll response:", response);
 
           if (enrollUserExamId) {
-            // Store the user_exam_id immediately
             setUserExamId(enrollUserExamId);
-            // Pass it to the second mutation
             startExamMutation.mutate(enrollUserExamId);
           } else {
             console.error("No user_exam_id in enroll response");
@@ -206,7 +207,7 @@ export default function DynamicExam() {
         },
       });
     }
-  }, [detailsLoading, examData]);
+  }, [examId]);
 
   // TIMER LOGIC
   useEffect(() => {
@@ -249,29 +250,33 @@ export default function DynamicExam() {
 
     const payload = {
       ...prepareAnswers(),
-      has_cheated: false, // Normal submission
+      has_cheated: false,
     };
     console.log("Submitting payload:", payload);
     submitExamMutation.mutate(payload);
   };
 
-  if (detailsLoading) {
+  // Loading state
+  if (enrollMutation.isPending || startExamMutation.isPending) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
         <div className="text-center">
-          <div className="text-lg font-medium text-gray-900">Loading exam…</div>
+          <div className="text-lg font-medium text-gray-900">
+            Starting exam…
+          </div>
           <div className="text-sm text-gray-500 mt-2">Please wait</div>
         </div>
       </div>
     );
   }
 
-  if (detailsError) {
+  // Error state
+  if (enrollMutation.isError || startExamMutation.isError) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
         <div className="text-center">
           <div className="text-lg font-medium text-red-600">
-            Failed to load exam
+            Failed to start exam
           </div>
           <div className="text-sm text-gray-500 mt-2">Please try again</div>
         </div>
@@ -279,6 +284,7 @@ export default function DynamicExam() {
     );
   }
 
+  // No questions
   if (questions.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
@@ -304,13 +310,12 @@ export default function DynamicExam() {
   const handleNext = () => {
     if (isEndOfModuleA && !showReview) {
       setShowReview(true);
-      // Don't lock module A here - only lock when time expires or moving to module B
     } else if (showReview) {
       setShowReview(false);
       setCurrentModule("model_b");
       setCurrent(0);
       setTimeLeft(35 * 60);
-      setModuleALocked(true); // Lock module A when proceeding to module B
+      setModuleALocked(true);
     } else {
       setCurrent((c) => Math.min(questions.length - 1, c + 1));
     }
@@ -326,7 +331,7 @@ export default function DynamicExam() {
     if (!moduleALocked) {
       setCurrent(index);
       setShowReview(false);
-      setCurrentModule("model_a"); // Stay in model_a to allow navigation
+      setCurrentModule("model_a");
     }
   };
 
@@ -334,7 +339,7 @@ export default function DynamicExam() {
   if (showReview) {
     return (
       <ReviewScreen
-        examData={examData}
+        examData={startExamMutation.data}
         flagged={flagged}
         handleNext={handleNext}
         handleQuestionClick={handleQuestionClick}
@@ -351,13 +356,15 @@ export default function DynamicExam() {
       {/* HEADER */}
       <ActiveExamHeader
         currentModule={currentModule}
-        examData={examData}
+        examData={startExamMutation.data}
         hasFocus={hasFocus}
         isInFullscreen={isInFullscreen}
         setShowCalculator={setShowCalculator}
         formatTime={formatTime}
         showCalculator={showCalculator}
         timeLeft={timeLeft}
+        setHelpSheet={setHelpSheet}
+        showHelpSheet={showHelpSheet}
       />
 
       {/* TOP TIMER BAR */}

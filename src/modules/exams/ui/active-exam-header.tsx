@@ -1,6 +1,6 @@
-import { Calculator } from "lucide-react";
+import { Calculator, ShieldQuestion } from "lucide-react";
 import React from "react";
-
+import { AssistanceSheet } from "../../shared/ui/assistance-sheet";
 export default function ActiveExamHeader({
   currentModule,
   examData,
@@ -10,6 +10,8 @@ export default function ActiveExamHeader({
   timeLeft,
   formatTime,
   showCalculator,
+  showHelpSheet,
+  setHelpSheet,
 }: any) {
   return (
     <header className="flex items-center justify-between border-b px-6 py-2 bg-gray-100 text-sm font-medium">
@@ -43,6 +45,9 @@ export default function ActiveExamHeader({
             </span>
           </div>
         </div>
+        {/* asset */}
+        <AssistanceSheet />
+        {/* calculator */}
         <button
           onClick={() => setShowCalculator(!showCalculator)}
           className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
