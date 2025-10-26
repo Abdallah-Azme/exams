@@ -1,0 +1,252 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { CalendarDays, Trophy, Clock, Loader2 } from "lucide-react";
+import { useStore } from "@/lib/store";
+import Link from "next/link";
+import { apiClient } from "@/src/utils";
+
+type ExamStats = {
+  total_questions: number;
+  recently_used_count: number;
+  unused_count: number;
+  most_used_questions: Record<string, number>;
+};
+
+type ExamData = {
+  exam_id: number;
+  exam_title: string;
+  total_score: number;
+  percentage: string;
+  submitted_at: string;
+  stats: ExamStats;
+};
+
+type ApiResponse = {
+  status: string;
+  message: string;
+  data: ExamData[];
+};
+
+async function fetchUserExamsStats(): Promise<ExamData[]> {
+  // ofetch returns the response directly, not wrapped in res.data
+  const response = await apiClient.get<ApiResponse>(
+    "/user-exams/all-distribution-stats"
+  );
+  return response.data;
+}
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const user = useStore((state) => state.user);
+
+  const {
+    data: exams = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["user-exams-stats"],
+    queryFn: fetchUserExamsStats,
+  });
+
+  // Calculate statistics
+  const totalExams = exams.length;
+  const averageScore =
+    exams.length > 0
+      ? (
+          exams.reduce((sum, exam) => sum + parseFloat(exam.percentage), 0) /
+          exams.length
+        ).toFixed(1)
+      : "0.0";
+  const lastExam = exams[0];
+
+  // Format date to be more readable
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Error Loading Profile</CardTitle>
+            <CardDescription>
+              {error instanceof Error
+                ? error.message
+                : "Failed to load exam data"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => router.push("/")} className="w-full">
+              Go to Home
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b bg-card">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4">
+          <div className="flex items-center gap-8">
+            <Link
+              href="/"
+              className="text-xl font-semibold text-blue-500 hover:underline hover:text-blue-400"
+            >
+              Demo book Exam
+            </Link>
+            <h1 className="text-xl font-semibold">Profile</h1>
+          </div>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              useStore.getState().setUser(null);
+              router.push("/signin");
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8 space-y-10">
+        {/* User Info */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl font-semibold">
+              Welcome, {user?.name ?? "Student"}
+            </CardTitle>
+            <CardDescription>
+              {user?.email ?? "student@example.com"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Exams</p>
+                  <p className="text-lg font-medium">{totalExams}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Average Score</p>
+                  <p className="text-lg font-medium">{averageScore}%</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Last Exam</p>
+                  <p className="text-lg font-medium">
+                    {lastExam?.exam_title ?? "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Total Questions
+                  </p>
+                  <p className="text-lg font-medium">
+                    {lastExam?.stats.total_questions ?? 0}
+                  </p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Exam History */}
+        <section>
+          <h2 className="text-2xl font-semibold mb-4">Exam History</h2>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : exams.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                No exams found
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {exams.map((exam, index) => {
+                const percentage = parseFloat(exam.percentage);
+                const isPassed = percentage >= 50; // Adjust threshold as needed
+
+                return (
+                  <Card key={`${exam.exam_id}-${index}`}>
+                    <CardHeader>
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-lg">
+                          {exam.exam_title}
+                        </CardTitle>
+                        <Badge variant={isPassed ? "secondary" : "destructive"}>
+                          {isPassed ? "Passed" : "Failed"}
+                        </Badge>
+                      </div>
+                      <CardDescription>
+                        {formatDate(exam.submitted_at)}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <span>Score:</span>
+                        <span className="font-medium">
+                          {exam.total_score} points
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <span>Percentage:</span>
+                        <span className="font-medium">
+                          {percentage.toFixed(2)}%
+                        </span>
+                      </div>
+                      <Progress value={percentage} />
+
+                      <div className="pt-2 border-t space-y-1">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Total Questions:</span>
+                          <span>{exam.stats.total_questions}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Recently Used:</span>
+                          <span>{exam.stats.recently_used_count}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Unused:</span>
+                          <span>{exam.stats.unused_count}</span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
