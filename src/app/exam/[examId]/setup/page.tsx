@@ -105,7 +105,6 @@ export default function ExamSetupPage() {
   }
 
   const examData: ExamDetails = data?.data?.data || {};
-  console.log({ examData });
 
   // Calculate total questions
   const modelAQuestions = examData.model_a?.questions?.length || 0;

@@ -88,11 +88,9 @@ export default function DynamicExam() {
   // Submit exam mutation
   const submitExamMutation = useMutation({
     mutationFn: (payload: any) => {
-      console.log("Submitting payload:", payload);
       return apiClient.post("/user-exams/submit-all-answers", payload);
     },
     onSuccess: () => {
-      console.log("Exam submitted successfully");
       router.push("/profile");
     },
   });
@@ -128,7 +126,6 @@ export default function DynamicExam() {
 
   // Handle exam submission due to cheating
   const handleCheatingSubmit = () => {
-    console.log("Cheating detected - submitting exam");
     if (!userExamId) {
       console.error("No user_exam_id available for submission");
       return;
@@ -163,7 +160,6 @@ export default function DynamicExam() {
       answers, // Now includes the actual answers
     };
 
-    console.log("Submitting cheating payload with answers:", payload);
     submitExamMutation.mutate(payload);
   };
 
@@ -186,8 +182,6 @@ export default function DynamicExam() {
         exam_id: examId,
       }),
     onSuccess: (response) => {
-      console.log("Start exam response:", response);
-
       // Calculate time left based on start_time and end_time
       const startTime = new Date(response.data.user_exam.start_time);
       const endTime = new Date(response.data.user_exam.end_time);
@@ -226,13 +220,11 @@ export default function DynamicExam() {
       enrollMutation.mutate(undefined, {
         onSuccess: (response) => {
           const enrollUserExamId = response?.data?.user_exam_id;
-          console.log("Enroll response:", response);
 
           if (enrollUserExamId) {
             setUserExamId(enrollUserExamId);
             startExamMutation.mutate(enrollUserExamId);
           } else {
-            console.error("No user_exam_id in enroll response");
           }
         },
         onError: (error) => {
@@ -285,7 +277,6 @@ export default function DynamicExam() {
       ...prepareAnswers(),
       has_cheated: false,
     };
-    console.log("Submitting payload:", payload);
     submitExamMutation.mutate(payload);
   };
 
