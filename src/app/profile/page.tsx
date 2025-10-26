@@ -224,21 +224,6 @@ export default function ProfilePage() {
                         </span>
                       </div>
                       <Progress value={percentage} />
-
-                      <div className="pt-2 border-t space-y-1">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Total Questions:</span>
-                          <span>{exam.stats.total_questions}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Recently Used:</span>
-                          <span>{exam.stats.recently_used_count}</span>
-                        </div>
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Unused:</span>
-                          <span>{exam.stats.unused_count}</span>
-                        </div>
-                      </div>
                     </CardContent>
                   </Card>
                 );

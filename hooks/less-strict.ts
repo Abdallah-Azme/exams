@@ -18,8 +18,6 @@ interface UseExamProctorReturn {
  *
  * A React hook that monitors exam integrity by:
  * - Detecting when the page loses focus or exits fullscreen
- * - Blocking right-click context menu
- * - Detecting and warning about DevTools being opened
  * - Showing a warning with a 10-second countdown
  * - Calling onViolationTimeout if the student doesn't return within 10 seconds
  * - Automatically recovering if conditions are restored
@@ -41,7 +39,6 @@ export function useExamProctor({
   const startTimeRef = useRef<number | null>(null);
   const showingRef = useRef<boolean>(false);
   const recoveringRef = useRef<boolean>(false);
-  const devToolsCheckIntervalRef = useRef<number | null>(null);
 
   // ---------- Helpers ----------
   const isActuallyFocused = () => {
@@ -129,63 +126,12 @@ export function useExamProctor({
     }
   };
 
-  // ---------- DevTools Detection ----------
-  const detectDevTools = () => {
-    const threshold = 160;
-    const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-    const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-
-    // Check if devtools is likely open (docked)
-    if (widthThreshold || heightThreshold) {
-      triggerViolation();
-    }
-  };
-
   // ---------- Event handlers ----------
   useEffect(() => {
     if (!isEnabled) return;
 
     setHasFocus(isActuallyFocused());
     setIsInFullscreen(isActuallyFullscreen());
-
-    // Prevent right-click
-    const onContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      return false;
-    };
-
-    // Prevent common DevTools shortcuts
-    const onKeyDown = (e: KeyboardEvent) => {
-      // F12
-      if (e.key === "F12") {
-        e.preventDefault();
-        return false;
-      }
-
-      // Ctrl+Shift+I / Cmd+Option+I (DevTools)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "I") {
-        e.preventDefault();
-        return false;
-      }
-
-      // Ctrl+Shift+J / Cmd+Option+J (Console)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "J") {
-        e.preventDefault();
-        return false;
-      }
-
-      // Ctrl+Shift+C / Cmd+Option+C (Inspect)
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "C") {
-        e.preventDefault();
-        return false;
-      }
-
-      // Ctrl+U / Cmd+U (View Source)
-      if ((e.ctrlKey || e.metaKey) && e.key === "u") {
-        e.preventDefault();
-        return false;
-      }
-    };
 
     const onVisibility = () => {
       const visState = document.visibilityState;
@@ -227,22 +173,13 @@ export function useExamProctor({
       } else {
         window.setTimeout(performRecovery, 50);
       }
-
-      // Check for DevTools on resize
-      detectDevTools();
     };
 
-    // Add event listeners
-    document.addEventListener("contextmenu", onContextMenu);
-    document.addEventListener("keydown", onKeyDown);
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("focus", onFocus);
     window.addEventListener("blur", onBlur);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     window.addEventListener("resize", onResize);
-
-    // Start DevTools detection interval
-    devToolsCheckIntervalRef.current = window.setInterval(detectDevTools, 1000);
 
     // Attempt entering fullscreen on mount
     (async () => {
@@ -257,19 +194,11 @@ export function useExamProctor({
     })();
 
     return () => {
-      document.removeEventListener("contextmenu", onContextMenu);
-      document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
       window.removeEventListener("resize", onResize);
-
-      if (devToolsCheckIntervalRef.current !== null) {
-        window.clearInterval(devToolsCheckIntervalRef.current);
-        devToolsCheckIntervalRef.current = null;
-      }
-
       clearCountdown();
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});

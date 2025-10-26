@@ -17,7 +17,7 @@ import { apiClient } from "@/src/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Flag } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 type Answer = {
   id: number;
@@ -77,6 +77,14 @@ export default function DynamicExam() {
   const [userExamId, setUserExamId] = useState<number | null>(null);
   const [examStarted, setExamStarted] = useState(false);
 
+  // Add a ref to store the latest selected answers
+  const selectedRef = useRef<Record<number, string>>({});
+
+  // Update the ref whenever selected changes
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
+
   // Submit exam mutation
   const submitExamMutation = useMutation({
     mutationFn: (payload: any) => {
@@ -92,10 +100,11 @@ export default function DynamicExam() {
   // Prepare answers for submission
   const prepareAnswers = () => {
     const allQuestions = [...modelAQuestions, ...modelBQuestions];
+    // Use selectedRef.current instead of selected to get the latest values
     const answers = allQuestions
-      .filter((q) => selected[q.id])
+      .filter((q) => selectedRef.current[q.id])
       .map((q) => {
-        const answer = selected[q.id];
+        const answer = selectedRef.current[q.id];
 
         if (q.type === "mcq") {
           return {
@@ -113,7 +122,7 @@ export default function DynamicExam() {
     return {
       user_exam_id: userExamId,
       has_cheated: false,
-      answers: answers,
+      answers,
     };
   };
 
@@ -124,13 +133,37 @@ export default function DynamicExam() {
       console.error("No user_exam_id available for submission");
       return;
     }
+
+    // Use the ref to get the latest answers
+    const allQuestions = [...modelAQuestions, ...modelBQuestions];
+    const answers = allQuestions
+      .filter((q) => selectedRef.current[q.id])
+      .map((q) => {
+        const answer = selectedRef.current[q.id];
+
+        if (q.type === "mcq") {
+          return {
+            user_exam_question_id: q.id,
+            answer_id: parseInt(answer),
+          };
+        } else {
+          return {
+            user_exam_question_id: q.id,
+            answer_text: answer,
+          };
+        }
+      });
+
     const payload = {
-      ...prepareAnswers(),
+      user_exam_id: userExamId,
       has_cheated: true,
-      Cheating_reason: isInFullscreen
+      cheating_reason: isInFullscreen
         ? "Student out the full screen"
         : "The student open another tab",
+      answers, // Now includes the actual answers
     };
+
+    console.log("Submitting cheating payload with answers:", payload);
     submitExamMutation.mutate(payload);
   };
 
