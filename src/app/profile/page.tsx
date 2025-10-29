@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { CalendarDays, Trophy, Clock, Loader2 } from "lucide-react";
+import { CalendarDays, Trophy, Clock, Loader2, Download } from "lucide-react";
 import { useStore } from "@/lib/store";
 import Link from "next/link";
 import { apiClient } from "@/src/utils";
@@ -41,7 +41,6 @@ type ApiResponse = {
 };
 
 async function fetchUserExamsStats(): Promise<ExamData[]> {
-  // ofetch returns the response directly, not wrapped in res.data
   const response = await apiClient.get<ApiResponse>(
     "/user-exams/all-distribution-stats"
   );
@@ -62,7 +61,6 @@ export default function ProfilePage() {
     queryFn: fetchUserExamsStats,
   });
 
-  // Calculate statistics
   const totalExams = exams.length;
   const averageScore =
     exams.length > 0
@@ -73,12 +71,11 @@ export default function ProfilePage() {
       : "0.0";
   const lastExam = exams[0];
 
-  // Format date to be more readable
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       year: "numeric",
-      month: "short",
+      month: "long",
       day: "numeric",
     });
   };
@@ -107,7 +104,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-8">
@@ -132,7 +128,6 @@ export default function ProfilePage() {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-10">
-        {/* User Info */}
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl font-semibold">
@@ -176,9 +171,8 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Exam History */}
         <section>
-          <h2 className="text-2xl font-semibold mb-4">Exam History</h2>
+          <h2 className="text-2xl font-semibold mb-6">Exam History</h2>
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -190,40 +184,86 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {exams.map((exam, index) => {
                 const percentage = parseFloat(exam.percentage);
-                const isPassed = percentage >= 50; // Adjust threshold as needed
+                const maxScore = 100;
+                const scaledScore = Math.round((percentage / 100) * 1600);
 
                 return (
-                  <Card key={`${exam.exam_id}-${index}`}>
-                    <CardHeader>
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-lg">
-                          {exam.exam_title}
-                        </CardTitle>
-                        <Badge variant={isPassed ? "secondary" : "destructive"}>
-                          {isPassed ? "Passed" : "Failed"}
-                        </Badge>
+                  <Card
+                    key={`${exam.exam_id}-${index}`}
+                    className="overflow-hidden"
+                  >
+                    {/* Header with dark blue background */}
+                    <div className="bg-[#0A4A6E] text-white p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-bold">EXAM</h3>
                       </div>
-                      <CardDescription>
-                        {formatDate(exam.submitted_at)}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between text-sm mb-2">
-                        <span>Score:</span>
-                        <span className="font-medium">
-                          {exam.total_score} points
+                      <div className="bg-[#0D5F8C] rounded px-3 py-2 flex items-center justify-between">
+                        <span className="font-semibold text-sm">
+                          {exam.exam_title.toUpperCase()}
+                        </span>
+                        <span className="text-sm">
+                          {formatDate(exam.submitted_at)}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-sm mb-2">
-                        <span>Percentage:</span>
-                        <span className="font-medium">
-                          {percentage.toFixed(2)}%
-                        </span>
+                    </div>
+
+                    {/* Score Section */}
+                    <CardContent className="p-6 bg-gradient-to-b from-gray-50 to-white">
+                      <div className="text-center mb-6">
+                        <p className="text-sm font-semibold text-gray-600 mb-2">
+                          YOUR TOTAL SCORE
+                        </p>
+                        <p className="text-6xl font-bold mb-2">{scaledScore}</p>
+                        <p className="text-sm text-gray-500">400-1600</p>
+                        <div className="w-16 h-0.5 bg-gray-300 mx-auto mt-2"></div>
                       </div>
-                      <Progress value={percentage} />
+
+                      {/* Score Breakdown */}
+                      <div className="space-y-4 mb-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-gray-800">
+                              Performance
+                            </p>
+                            <p className="text-sm text-gray-500">Percentage</p>
+                          </div>
+                          <p className="text-3xl font-bold">
+                            {percentage.toFixed(0)}%
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-gray-800">
+                              Total Points
+                            </p>
+                            <p className="text-sm text-gray-500">Earned</p>
+                          </div>
+                          <p className="text-3xl font-bold">
+                            {exam.total_score}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      {/* <div className="space-y-2">
+                        <Button
+                          className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold rounded-full"
+                          size="lg"
+                        >
+                          Score Details
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="w-full rounded-full font-semibold"
+                          size="lg"
+                        >
+                          View Questions →
+                        </Button>
+                      </div> */}
                     </CardContent>
                   </Card>
                 );

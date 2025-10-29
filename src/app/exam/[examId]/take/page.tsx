@@ -70,12 +70,14 @@ export default function DynamicExam() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [showHelpSheet, setHelpSheet] = useState(false);
   const [currentModule, setCurrentModule] = useState<
-    "model_a" | "model_b" | "review_a"
+    "model_a" | "model_b" | "review_a" | "review_b"
   >("model_a");
   const [showReview, setShowReview] = useState(false);
   const [moduleALocked, setModuleALocked] = useState(false);
+  const [moduleBLocked, setModuleBLocked] = useState(false);
   const [userExamId, setUserExamId] = useState<number | null>(null);
   const [examStarted, setExamStarted] = useState(false);
+  const [totalExamTime, setTotalExamTime] = useState<number>(0);
 
   // Add a ref to store the latest selected answers
   const selectedRef = useRef<Record<number, string>>({});
@@ -182,23 +184,26 @@ export default function DynamicExam() {
         exam_id: examId,
       }),
     onSuccess: (response) => {
-      // Calculate time left based on start_time and end_time
+      // Calculate total time and divide by 2 for each module
       const startTime = new Date(response.data.user_exam.start_time);
       const endTime = new Date(response.data.user_exam.end_time);
       const currentTime = new Date();
-
-      const remainingSeconds = Math.floor(
-        (endTime.getTime() - currentTime.getTime()) / 1000
+      console.log({ response });
+      const totalSeconds = Math.floor(
+        (endTime.getTime() - startTime.getTime()) / 1000
       );
-      const initialTime = Math.max(0, remainingSeconds);
 
-      setTimeLeft(initialTime);
+      // Store total exam time and set half for first module
+      setTotalExamTime(totalSeconds);
+      const halfTime = Math.floor(totalSeconds / 2);
+      setTimeLeft(halfTime);
       setExamStarted(true);
     },
     onError: (error) => {
       console.error("Start exam error:", error);
-      // Fallback to 35 minutes
-      setTimeLeft(35 * 60);
+      // Fallback to 35 minutes total (17.5 minutes per module)
+      setTotalExamTime(35 * 60);
+      setTimeLeft(Math.floor((35 * 60) / 2));
       setExamStarted(true);
     },
   });
@@ -239,9 +244,14 @@ export default function DynamicExam() {
     if (!timeLeft) return;
     if (timeLeft <= 0) {
       if (currentModule === "model_a") {
+        // Time up for Module A - go directly to Module B
         setModuleALocked(true);
-        setShowReview(true);
+        setCurrentModule("model_b");
+        setCurrent(0);
+        setTimeLeft(Math.floor(totalExamTime / 2)); // Reset timer for Module B
       } else if (currentModule === "model_b") {
+        // Time up for Module B - submit exam
+        setModuleBLocked(true);
         handleSubmitExam();
       }
       return;
@@ -251,7 +261,7 @@ export default function DynamicExam() {
       1000
     );
     return () => clearInterval(timer);
-  }, [timeLeft, currentModule]);
+  }, [timeLeft, currentModule, totalExamTime]);
 
   const formatTime = (t: number) => {
     const m = Math.floor(t / 60);
@@ -322,9 +332,9 @@ export default function DynamicExam() {
   }
 
   const q = questions[current];
-  const totalDuration = 35 * 60;
+  const moduleTime = Math.floor(totalExamTime / 2);
   const progressPercentage =
-    ((totalDuration - (timeLeft || 0)) / totalDuration) * 100;
+    ((moduleTime - (timeLeft || 0)) / moduleTime) * 100;
 
   const isEndOfModuleA =
     currentModule === "model_a" && current === modelAQuestions.length - 1;
@@ -334,33 +344,53 @@ export default function DynamicExam() {
   const handleNext = () => {
     if (isEndOfModuleA && !showReview) {
       setShowReview(true);
-    } else if (showReview) {
+      setCurrentModule("review_a");
+    } else if (showReview && currentModule === "review_a") {
+      // Moving from Module A review to Module B
       setShowReview(false);
       setCurrentModule("model_b");
       setCurrent(0);
-      setTimeLeft(35 * 60);
+      setTimeLeft(Math.floor(totalExamTime / 2)); // Reset timer to half for module B
       setModuleALocked(true);
+    } else if (isEndOfModuleB && !showReview) {
+      setShowReview(true);
+      setCurrentModule("review_b");
+    } else if (showReview && currentModule === "review_b") {
+      // Submit exam after Module B review
+      handleSubmitExam();
     } else {
       setCurrent((c) => Math.min(questions.length - 1, c + 1));
     }
   };
 
   const handleReviewBack = () => {
-    if (!moduleALocked) {
+    if (currentModule === "review_a" && !moduleALocked) {
       setShowReview(false);
+      setCurrentModule("model_a");
+    } else if (currentModule === "review_b" && !moduleBLocked) {
+      setShowReview(false);
+      setCurrentModule("model_b");
     }
   };
 
   const handleQuestionClick = (index: number) => {
-    if (!moduleALocked) {
+    if (currentModule === "review_a" && !moduleALocked) {
       setCurrent(index);
       setShowReview(false);
       setCurrentModule("model_a");
+    } else if (currentModule === "review_b" && !moduleBLocked) {
+      setCurrent(index);
+      setShowReview(false);
+      setCurrentModule("model_b");
     }
   };
 
   // Show review screen
   if (showReview) {
+    const isModuleA = currentModule === "review_a";
+    const reviewQuestions = isModuleA ? modelAQuestions : modelBQuestions;
+    const moduleLocked = isModuleA ? moduleALocked : moduleBLocked;
+
     return (
       <ReviewScreen
         examData={startExamMutation.data}
@@ -368,8 +398,8 @@ export default function DynamicExam() {
         handleNext={handleNext}
         handleQuestionClick={handleQuestionClick}
         handleReviewBack={handleReviewBack}
-        modelAQuestions={modelAQuestions}
-        moduleALocked={moduleALocked}
+        modelAQuestions={reviewQuestions}
+        moduleALocked={moduleLocked}
         selected={selected}
       />
     );
@@ -402,21 +432,11 @@ export default function DynamicExam() {
       {/* MAIN CONTENT */}
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel defaultSize={50} minSize={20}>
-          <div className="h-full border-r p-6 overflow-auto hidden md:block">
-            <div className="text-sm text-gray-600 mb-4">
-              <div className="font-medium">Question Details:</div>
-              <div>Type: {q.type}</div>
-              <div>Marks: {q.marks}</div>
-            </div>
-
-            {q.explanation && (
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <div className="text-sm font-medium text-blue-900 mb-2">
-                  Explanation:
-                </div>
-                <p className="text-sm text-blue-800">{q.explanation}</p>
-              </div>
-            )}
+          <div className="p-6 overflow-auto h-full">
+            <p
+              className="font-medium mb-6 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: q.question_text }}
+            />
           </div>
         </ResizablePanel>
 
@@ -452,10 +472,6 @@ export default function DynamicExam() {
                   {flagged.has(q.id) ? "Flagged" : "Mark for Review"}
                 </Button>
               </div>
-
-              <p className="font-medium mb-6 leading-relaxed">
-                {q.question_text}
-              </p>
 
               <div className="space-y-3">
                 {q.type === "mcq" && q.answers && q.answers.length > 0 ? (
@@ -510,9 +526,6 @@ export default function DynamicExam() {
                     />
                   </>
                 )}
-                <p className="text-xs text-gray-500">
-                  Question type: {q.type} • Worth {q.marks} marks
-                </p>
               </div>
             </div>
 
@@ -537,13 +550,10 @@ export default function DynamicExam() {
                 </Button>
               ) : isEndOfModuleB ? (
                 <Button
-                  onClick={handleSubmitExam}
-                  disabled={submitExamMutation.isPending || !userExamId}
-                  className="gap-1 bg-green-600 hover:bg-green-700"
+                  onClick={handleNext}
+                  className="gap-1 bg-blue-600 hover:bg-blue-700"
                 >
-                  {submitExamMutation.isPending
-                    ? "Submitting..."
-                    : "Submit Exam"}
+                  Continue to Review
                 </Button>
               ) : (
                 <Button

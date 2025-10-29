@@ -9,6 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiClient } from "@/src/utils";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, CheckCircle2, Clock } from "lucide-react";
@@ -58,6 +65,10 @@ export default function ExamSection() {
     router.push(`/exam/${examId}/setup`);
   };
 
+  const handleExamSelect = (examId: string) => {
+    router.push(`/exam/${examId}/setup`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -81,15 +92,38 @@ export default function ExamSection() {
       </div>
     );
   }
+
+  const sortedExams = exams.sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-      {exams
-        .sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-        // .filter((exam) => exam.status !== "active")
-        .map((exam) => (
+    <div className="space-y-6">
+      {/* Select Dropdown to choose exam */}
+      <div className="max-w-md mx-auto mb-20 z-50 relative">
+        <label className="block text-sm font-medium mb-2">
+          Quick access to exam
+        </label>
+        <Select onValueChange={handleExamSelect}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select an exam" />
+          </SelectTrigger>
+          <SelectContent>
+            {sortedExams.map((exam) => (
+              <SelectItem key={exam.id} value={exam.id.toString()}>
+                {exam.subject} - {exam.total_marks} marks
+                {exam.status === "active" && " (In Progress)"}
+                {exam.status === "completed" && " (Completed)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Exam Cards Grid */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {sortedExams.map((exam) => (
           <Card key={exam.id} className="flex flex-col">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -156,6 +190,7 @@ export default function ExamSection() {
             </CardContent>
           </Card>
         ))}
+      </div>
     </div>
   );
 }

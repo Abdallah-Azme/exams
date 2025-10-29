@@ -21,6 +21,11 @@ export default function ActiveExamHeader({
           ? examData?.data?.model_a?.name
           : examData?.data?.model_b?.name}
       </div>
+
+      <div className="text-gray-600 text-2xl font-bold">
+        Time Remaining: {formatTime(timeLeft || 0)}
+      </div>
+
       <div className="flex items-center gap-4">
         {/* Proctoring Status Indicators */}
         <div className="flex items-center gap-3">
@@ -55,9 +60,6 @@ export default function ActiveExamHeader({
         >
           <Calculator size={20} className="text-gray-700" />
         </button>
-        <div className="text-gray-600">
-          Time Remaining: {formatTime(timeLeft || 0)}
-        </div>
       </div>
     </header>
   );
