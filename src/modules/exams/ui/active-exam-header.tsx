@@ -1,5 +1,4 @@
-import { Calculator, ShieldQuestion } from "lucide-react";
-import React from "react";
+import { Calculator } from "lucide-react";
 import { AssistanceSheet } from "../../shared/ui/assistance-sheet";
 export default function ActiveExamHeader({
   currentModule,
@@ -13,13 +12,14 @@ export default function ActiveExamHeader({
   showHelpSheet,
   setHelpSheet,
 }: any) {
+  console.log({ currentModule, examData });
   return (
     <header className="flex items-center justify-between border-b px-6 py-2 bg-gray-100 text-sm font-medium">
       <div className="text-gray-600">
-        Mathematics Exam -{" "}
+        Mathematics Exam -
         {currentModule === "model_a" || currentModule === "review_a"
-          ? examData?.data?.model_a?.name
-          : examData?.data?.model_b?.name}
+          ? examData?.data?.user_exam?.models?.model_a?.name
+          : examData?.data?.user_exam?.models?.model_b?.name}
       </div>
 
       <div className="text-gray-600 text-2xl font-bold">

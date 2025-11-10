@@ -112,7 +112,7 @@ export default function ExamSection() {
           <SelectContent>
             {sortedExams.map((exam) => (
               <SelectItem key={exam.id} value={exam.id.toString()}>
-                {exam.subject} - {exam.total_marks} marks
+                {exam.subject}
                 {exam.status === "active" && " (In Progress)"}
                 {exam.status === "completed" && " (Completed)"}
               </SelectItem>

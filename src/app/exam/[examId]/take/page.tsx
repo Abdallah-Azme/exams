@@ -12,6 +12,8 @@ import { useExamProctor } from "@/hooks/use-exam-proctor";
 import ActiveExamHeader from "@/src/modules/exams/ui/active-exam-header";
 import DesmosCalculator from "@/src/modules/exams/ui/desmos-calculator";
 import ErrorDialog from "@/src/modules/exams/ui/error-dialog";
+import ExamFooter from "@/src/modules/exams/ui/exam-footer";
+import NavigationPopover from "@/src/modules/exams/ui/navigation-popover";
 import ReviewScreen from "@/src/modules/exams/ui/review-screen";
 import { apiClient } from "@/src/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -318,7 +320,6 @@ export default function DynamicExam() {
     );
   }
 
-  // No questions
   if (questions.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen bg-white">
@@ -346,7 +347,6 @@ export default function DynamicExam() {
       setShowReview(true);
       setCurrentModule("review_a");
     } else if (showReview && currentModule === "review_a") {
-      // Moving from Module A review to Module B
       setShowReview(false);
       setCurrentModule("model_b");
       setCurrent(0);
@@ -571,14 +571,23 @@ export default function DynamicExam() {
       </ResizablePanelGroup>
 
       {/* FOOTER */}
-      <footer className="text-xs text-center text-gray-400 border-t py-1">
-        Mathematics Exam • Module{" "}
-        {currentModule === "model_a" || currentModule === "review_a"
-          ? "1"
-          : "2"}{" "}
-        • Question {current + 1} of {questions.length}
-      </footer>
-
+      <div className="relative">
+        <NavigationPopover
+          currentModule={currentModule}
+          moduleALocked={moduleALocked}
+          moduleBLocked={moduleBLocked}
+          modelAQuestions={modelAQuestions}
+          modelBQuestions={modelBQuestions}
+          setCurrent={setCurrent}
+          setShowReview={setShowReview}
+          setCurrentModule={setCurrentModule}
+        />
+        <ExamFooter
+          current={current}
+          currentModule={currentModule}
+          questions={questions}
+        />
+      </div>
       {/* DESMOS CALCULATOR MODAL */}
       {showCalculator && (
         <DesmosCalculator setShowCalculator={setShowCalculator} />

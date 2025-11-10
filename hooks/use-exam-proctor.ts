@@ -42,14 +42,30 @@ export function useExamProctor({
   const showingRef = useRef<boolean>(false);
   const recoveringRef = useRef<boolean>(false);
   const devToolsCheckIntervalRef = useRef<number | null>(null);
+  const isMobileRef = useRef<boolean>(false);
+  const lastResizeTimeRef = useRef<number>(0);
+  const inputFocusedRef = useRef<boolean>(false);
 
   // ---------- Helpers ----------
+  const isMobileDevice = () => {
+    if (typeof navigator === "undefined") return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+  };
+
   const isActuallyFocused = () => {
     return typeof document !== "undefined" ? document.hasFocus() : true;
   };
 
   const isActuallyFullscreen = () => {
-    // Fullscreen API check
+    // On mobile, fullscreen API may not work reliably, so we're more lenient
+    if (isMobileRef.current) {
+      // For mobile, just check if the page has focus
+      return isActuallyFocused();
+    }
+
+    // Fullscreen API check (desktop)
     if (typeof document !== "undefined" && !!document.fullscreenElement)
       return true;
 
@@ -102,6 +118,11 @@ export function useExamProctor({
   };
 
   const triggerViolation = () => {
+    // Don't trigger if an input is focused (keyboard is likely open)
+    if (inputFocusedRef.current && isMobileRef.current) {
+      return;
+    }
+
     if (!showingRef.current && isEnabled) {
       showingRef.current = true;
       setShowWarning(true);
@@ -129,8 +150,11 @@ export function useExamProctor({
     }
   };
 
-  // ---------- DevTools Detection ----------
+  // ---------- DevTools Detection (Desktop only) ----------
   const detectDevTools = () => {
+    // Skip DevTools detection on mobile devices
+    if (isMobileRef.current) return;
+
     const threshold = 160;
     const widthThreshold = window.outerWidth - window.innerWidth > threshold;
     const heightThreshold = window.outerHeight - window.innerHeight > threshold;
@@ -145,17 +169,47 @@ export function useExamProctor({
   useEffect(() => {
     if (!isEnabled) return;
 
+    // Detect if mobile device
+    isMobileRef.current = isMobileDevice();
+
     setHasFocus(isActuallyFocused());
     setIsInFullscreen(isActuallyFullscreen());
 
-    // Prevent right-click
-    const onContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      return false;
+    // Track input focus to prevent false violations on mobile
+    const onInputFocus = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        inputFocusedRef.current = true;
+      }
     };
 
-    // Prevent common DevTools shortcuts
+    const onInputBlur = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        inputFocusedRef.current = false;
+      }
+    };
+
+    // Prevent right-click (desktop only)
+    const onContextMenu = (e: MouseEvent) => {
+      if (!isMobileRef.current) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    // Prevent common DevTools shortcuts (desktop only)
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isMobileRef.current) return;
+
       // F12
       if (e.key === "F12") {
         e.preventDefault();
@@ -191,7 +245,10 @@ export function useExamProctor({
       const visState = document.visibilityState;
       if (visState === "hidden") {
         setHasFocus(false);
-        triggerViolation();
+        // On mobile, don't trigger violation if input is focused (keyboard might be causing this)
+        if (!inputFocusedRef.current || !isMobileRef.current) {
+          triggerViolation();
+        }
       } else {
         setHasFocus(isActuallyFocused());
         window.setTimeout(performRecovery, 80);
@@ -205,14 +262,17 @@ export function useExamProctor({
 
     const onBlur = () => {
       setHasFocus(false);
-      triggerViolation();
+      // Don't trigger violation immediately on mobile if input is focused
+      if (!inputFocusedRef.current || !isMobileRef.current) {
+        triggerViolation();
+      }
     };
 
     const onFullscreenChange = () => {
       const nowFs = isActuallyFullscreen();
       setIsInFullscreen(nowFs);
 
-      if (!nowFs) {
+      if (!nowFs && !isMobileRef.current) {
         triggerViolation();
       } else {
         window.setTimeout(performRecovery, 50);
@@ -220,46 +280,70 @@ export function useExamProctor({
     };
 
     const onResize = () => {
+      const now = Date.now();
+      const timeSinceLastResize = now - lastResizeTimeRef.current;
+      lastResizeTimeRef.current = now;
+
+      // On mobile, ignore rapid resize events (likely keyboard opening/closing)
+      if (isMobileRef.current && timeSinceLastResize < 300) {
+        return;
+      }
+
       const nowFs = isActuallyFullscreen();
       setIsInFullscreen(nowFs);
-      if (!nowFs) {
+
+      // Only trigger violation on desktop or if no input is focused on mobile
+      if (!nowFs && (!isMobileRef.current || !inputFocusedRef.current)) {
         triggerViolation();
       } else {
         window.setTimeout(performRecovery, 50);
       }
 
-      // Check for DevTools on resize
-      detectDevTools();
+      // Check for DevTools on resize (desktop only)
+      if (!isMobileRef.current) {
+        detectDevTools();
+      }
     };
 
     // Add event listeners
     document.addEventListener("contextmenu", onContextMenu);
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("focusin", onInputFocus, true);
+    document.addEventListener("focusout", onInputBlur, true);
     window.addEventListener("focus", onFocus);
     window.addEventListener("blur", onBlur);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     window.addEventListener("resize", onResize);
 
-    // Start DevTools detection interval
-    devToolsCheckIntervalRef.current = window.setInterval(detectDevTools, 1000);
+    // Start DevTools detection interval (desktop only)
+    if (!isMobileRef.current) {
+      devToolsCheckIntervalRef.current = window.setInterval(
+        detectDevTools,
+        1000
+      );
+    }
 
-    // Attempt entering fullscreen on mount
-    (async () => {
-      try {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-          setIsInFullscreen(isActuallyFullscreen());
+    // Attempt entering fullscreen on mount (desktop only)
+    if (!isMobileRef.current) {
+      (async () => {
+        try {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+            setIsInFullscreen(isActuallyFullscreen());
+          }
+        } catch {
+          // ignore failures
         }
-      } catch {
-        // ignore failures
-      }
-    })();
+      })();
+    }
 
     return () => {
       document.removeEventListener("contextmenu", onContextMenu);
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("focusin", onInputFocus, true);
+      document.removeEventListener("focusout", onInputBlur, true);
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("blur", onBlur);
       document.removeEventListener("fullscreenchange", onFullscreenChange);

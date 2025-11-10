@@ -8,8 +8,6 @@ import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 
 export default function Header() {
-  const user = useStore((state) => state.user);
-
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiClient.post("/logout");

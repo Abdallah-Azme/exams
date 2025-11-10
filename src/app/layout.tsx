@@ -28,7 +28,7 @@ export default function RootLayout({
           position="top-right"
           toastOptions={{
             classNames: {
-              success: "!bg-green-500 !text-white",
+              success: "!bg-green-500 text-white!",
               error: "!bg-red-500 !text-white",
             },
           }}
