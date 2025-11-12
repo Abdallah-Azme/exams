@@ -32,22 +32,6 @@ export default function NavigationPopover({
 }: NavigationPopoverProps) {
   const [open, setOpen] = useState(false);
 
-  // Debug: log the values
-  console.log("NavigationPopover render:", {
-    currentModule,
-    moduleALocked,
-    moduleBLocked,
-    modelAQuestionsLength: modelAQuestions?.length,
-    modelBQuestionsLength: modelBQuestions?.length,
-  });
-
-  // Only show if we're in a locked module and in question view (not review)
-  const shouldShow =
-    (currentModule === "model_a" && moduleALocked) ||
-    (currentModule === "model_b" && moduleBLocked);
-
-  console.log("shouldShow:", shouldShow);
-
   const isModuleA = currentModule === "model_a";
   const questions = isModuleA ? modelAQuestions : modelBQuestions;
 

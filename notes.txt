@@ -1,0 +1,16 @@
+1- Badge for questions 
+
+2- Show the exam name and test_number
+
+3- Student name
+
+4- Form in Dashboard for entering the assistance 
+
+5- Card test points
+
+6- Can submit exam in cheating even he didnt answer any questions
+
+7- If he cheated he still get points for his answers, and at least 200 points
+
+
+

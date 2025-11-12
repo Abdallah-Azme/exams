@@ -8,10 +8,12 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { useExamProctor } from "@/hooks/use-exam-proctor";
+// COMMENTED OUT: Proctoring hook
+// import { useExamProctor } from "@/hooks/use-exam-proctor";
 import ActiveExamHeader from "@/src/modules/exams/ui/active-exam-header";
 import DesmosCalculator from "@/src/modules/exams/ui/desmos-calculator";
-import ErrorDialog from "@/src/modules/exams/ui/error-dialog";
+// COMMENTED OUT: Error dialog for proctoring
+// import ErrorDialog from "@/src/modules/exams/ui/error-dialog";
 import ExamFooter from "@/src/modules/exams/ui/exam-footer";
 import NavigationPopover from "@/src/modules/exams/ui/navigation-popover";
 import ReviewScreen from "@/src/modules/exams/ui/review-screen";
@@ -128,51 +130,51 @@ export default function DynamicExam() {
     };
   };
 
-  // Handle exam submission due to cheating
-  const handleCheatingSubmit = () => {
-    if (!userExamId) {
-      console.error("No user_exam_id available for submission");
-      return;
-    }
+  // COMMENTED OUT: Handle exam submission due to cheating
+  // const handleCheatingSubmit = () => {
+  //   if (!userExamId) {
+  //     console.error("No user_exam_id available for submission");
+  //     return;
+  //   }
 
-    // Use the ref to get the latest answers
-    const allQuestions = [...modelAQuestions, ...modelBQuestions];
-    const answers = allQuestions
-      .filter((q) => selectedRef.current[q.id])
-      .map((q) => {
-        const answer = selectedRef.current[q.id];
+  //   // Use the ref to get the latest answers
+  //   const allQuestions = [...modelAQuestions, ...modelBQuestions];
+  //   const answers = allQuestions
+  //     .filter((q) => selectedRef.current[q.id])
+  //     .map((q) => {
+  //       const answer = selectedRef.current[q.id];
 
-        if (q.type === "mcq") {
-          return {
-            user_exam_question_id: q.id,
-            answer_id: parseInt(answer),
-          };
-        } else {
-          return {
-            user_exam_question_id: q.id,
-            answer_text: answer,
-          };
-        }
-      });
+  //       if (q.type === "mcq") {
+  //         return {
+  //           user_exam_question_id: q.id,
+  //           answer_id: parseInt(answer),
+  //         };
+  //       } else {
+  //         return {
+  //           user_exam_question_id: q.id,
+  //           answer_text: answer,
+  //         };
+  //       }
+  //     });
 
-    const payload = {
-      user_exam_id: userExamId,
-      has_cheated: true,
-      cheating_reason: isInFullscreen
-        ? "Student out the full screen"
-        : "The student open another tab",
-      answers, // Now includes the actual answers
-    };
+  //   const payload = {
+  //     user_exam_id: userExamId,
+  //     has_cheated: true,
+  //     cheating_reason: isInFullscreen
+  //       ? "Student out the full screen"
+  //       : "The student open another tab",
+  //     answers, // Now includes the actual answers
+  //   };
 
-    submitExamMutation.mutate(payload);
-  };
+  //   submitExamMutation.mutate(payload);
+  // };
 
-  // Use the proctoring hook
-  const { showWarning, countdown, isInFullscreen, hasFocus, isTimerActive } =
-    useExamProctor({
-      onViolationTimeout: handleCheatingSubmit,
-      isEnabled: examStarted,
-    });
+  // COMMENTED OUT: Use the proctoring hook
+  // const { showWarning, countdown, isInFullscreen, hasFocus, isTimerActive } =
+  //   useExamProctor({
+  //     onViolationTimeout: handleCheatingSubmit,
+  //     isEnabled: examStarted,
+  //   });
 
   // Enroll Mutation
   const enrollMutation = useMutation({
@@ -190,7 +192,6 @@ export default function DynamicExam() {
       const startTime = new Date(response.data.user_exam.start_time);
       const endTime = new Date(response.data.user_exam.end_time);
       const currentTime = new Date();
-      console.log({ response });
       const totalSeconds = Math.floor(
         (endTime.getTime() - startTime.getTime()) / 1000
       );
@@ -411,8 +412,9 @@ export default function DynamicExam() {
       <ActiveExamHeader
         currentModule={currentModule}
         examData={startExamMutation.data}
-        hasFocus={hasFocus}
-        isInFullscreen={isInFullscreen}
+        // COMMENTED OUT: Proctoring props
+        // hasFocus={hasFocus}
+        // isInFullscreen={isInFullscreen}
         setShowCalculator={setShowCalculator}
         formatTime={formatTime}
         showCalculator={showCalculator}
@@ -593,13 +595,13 @@ export default function DynamicExam() {
         <DesmosCalculator setShowCalculator={setShowCalculator} />
       )}
 
-      {/* PROCTORING WARNING DIALOG */}
-      <ErrorDialog
+      {/* COMMENTED OUT: PROCTORING WARNING DIALOG */}
+      {/* <ErrorDialog
         countdown={countdown}
         hasFocus={hasFocus}
         isInFullscreen={isInFullscreen}
         showWarning={showWarning}
-      />
+      /> */}
     </div>
   );
 }

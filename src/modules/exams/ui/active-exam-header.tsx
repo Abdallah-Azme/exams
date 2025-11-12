@@ -12,7 +12,6 @@ export default function ActiveExamHeader({
   showHelpSheet,
   setHelpSheet,
 }: any) {
-  console.log({ currentModule, examData });
   return (
     <header className="flex items-center justify-between border-b px-6 py-2 bg-gray-100 text-sm font-medium">
       <div className="text-gray-600">
