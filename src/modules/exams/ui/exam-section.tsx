@@ -35,6 +35,7 @@ export type Exam = {
   end_time: string;
   created_at: string;
   updated_at: string;
+  test_number: string;
 };
 
 export type ExamsResponse = {
@@ -43,7 +44,6 @@ export type ExamsResponse = {
   data: Exam[];
 };
 
-// ✅ Fetch exams using your global API client
 async function fetchExams(): Promise<Exam[]> {
   const res = await apiClient.get<ExamsResponse>("/exams/all");
   return res.data;
@@ -112,7 +112,7 @@ export default function ExamSection() {
           <SelectContent>
             {sortedExams.map((exam) => (
               <SelectItem key={exam.id} value={exam.id.toString()}>
-                {exam.subject}
+                {exam.subject + " - " + exam.test_number}
                 {exam.status === "active" && " (In Progress)"}
                 {exam.status === "completed" && " (Completed)"}
               </SelectItem>
@@ -128,7 +128,9 @@ export default function ExamSection() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-xl">{exam.subject}</CardTitle>
+                  <CardTitle className="text-xl">
+                    {exam.subject + " - " + exam.test_number}
+                  </CardTitle>
                   <CardDescription className="mt-1">
                     {exam.total_marks} total marks
                   </CardDescription>

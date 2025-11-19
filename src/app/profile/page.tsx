@@ -187,7 +187,6 @@ export default function ProfilePage() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {exams.map((exam, index) => {
                 const percentage = parseFloat(exam.percentage);
-                const maxScore = 100;
                 const scaledScore = Math.round((percentage / 100) * 1600);
 
                 return (
@@ -216,54 +215,10 @@ export default function ProfilePage() {
                         <p className="text-sm font-semibold text-gray-600 mb-2">
                           YOUR TOTAL SCORE
                         </p>
-                        <p className="text-6xl font-bold mb-2">{scaledScore}</p>
-                        <p className="text-sm text-gray-500">400-1600</p>
-                        <div className="w-16 h-0.5 bg-gray-300 mx-auto mt-2"></div>
+                        <p className="text-6xl font-bold mb-2">
+                          {exam.total_score}
+                        </p>
                       </div>
-
-                      {/* Score Breakdown */}
-                      <div className="space-y-4 mb-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-gray-800">
-                              Performance
-                            </p>
-                            <p className="text-sm text-gray-500">Percentage</p>
-                          </div>
-                          <p className="text-3xl font-bold">
-                            {percentage.toFixed(0)}%
-                          </p>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-gray-800">
-                              Total Points
-                            </p>
-                            <p className="text-sm text-gray-500">Earned</p>
-                          </div>
-                          <p className="text-3xl font-bold">
-                            {exam.total_score}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      {/* <div className="space-y-2">
-                        <Button
-                          className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-semibold rounded-full"
-                          size="lg"
-                        >
-                          Score Details
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="w-full rounded-full font-semibold"
-                          size="lg"
-                        >
-                          View Questions →
-                        </Button>
-                      </div> */}
                     </CardContent>
                   </Card>
                 );
