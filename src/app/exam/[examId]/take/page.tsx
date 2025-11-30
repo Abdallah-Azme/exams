@@ -63,6 +63,71 @@ type ExamStartResponse = {
   };
 };
 
+// localStorage helper functions
+const getStorageKey = (examId: string | string[] | undefined, key: string) => {
+  if (!examId) return null;
+  return `exam_${examId}_${key}`;
+};
+
+const getStoredTime = (
+  examId: string | string[] | undefined,
+  key: string
+): Date | null => {
+  if (typeof window === "undefined") return null;
+  const storageKey = getStorageKey(examId, key);
+  if (!storageKey) return null;
+  const stored = localStorage.getItem(storageKey);
+  return stored ? new Date(stored) : null;
+};
+
+const setStoredTime = (
+  examId: string | string[] | undefined,
+  key: string,
+  time: Date
+) => {
+  if (typeof window === "undefined") return;
+  const storageKey = getStorageKey(examId, key);
+  if (!storageKey) return;
+  localStorage.setItem(storageKey, time.toISOString());
+};
+
+const getStoredNumber = (
+  examId: string | string[] | undefined,
+  key: string
+): number | null => {
+  if (typeof window === "undefined") return null;
+  const storageKey = getStorageKey(examId, key);
+  if (!storageKey) return null;
+  const stored = localStorage.getItem(storageKey);
+  return stored ? parseInt(stored, 10) : null;
+};
+
+const setStoredNumber = (
+  examId: string | string[] | undefined,
+  key: string,
+  value: number
+) => {
+  if (typeof window === "undefined") return;
+  const storageKey = getStorageKey(examId, key);
+  if (!storageKey) return;
+  localStorage.setItem(storageKey, value.toString());
+};
+
+const clearExamStorage = (examId: string | string[] | undefined) => {
+  if (typeof window === "undefined") return;
+  const keys = [
+    "start_time",
+    "module_a_start_time",
+    "module_b_start_time",
+    "total_duration",
+    "module_duration",
+  ];
+  keys.forEach((key) => {
+    const storageKey = getStorageKey(examId, key);
+    if (storageKey) localStorage.removeItem(storageKey);
+  });
+};
+
 export default function DynamicExam() {
   const { examId } = useParams();
   const router = useRouter();
@@ -82,6 +147,9 @@ export default function DynamicExam() {
   const [userExamId, setUserExamId] = useState<number | null>(null);
   const [examStarted, setExamStarted] = useState(false);
   const [totalExamTime, setTotalExamTime] = useState<number>(0);
+  const [examStartTime, setExamStartTime] = useState<Date | null>(null);
+  const [moduleAStartTime, setModuleAStartTime] = useState<Date | null>(null);
+  const [moduleBStartTime, setModuleBStartTime] = useState<Date | null>(null);
 
   // Add a ref to store the latest selected answers
   const selectedRef = useRef<Record<number, string>>({});
@@ -188,25 +256,74 @@ export default function DynamicExam() {
         exam_id: examId,
       }),
     onSuccess: (response) => {
-      // Calculate total time and divide by 2 for each module
-      const startTime = new Date(response.data.user_exam.start_time);
-      const endTime = new Date(response.data.user_exam.end_time);
+      // Get server times
+      const serverStartTime = new Date(response.data.user_exam.start_time);
+      const serverEndTime = new Date(response.data.user_exam.end_time);
       const currentTime = new Date();
-      const totalSeconds = Math.floor(
-        (endTime.getTime() - startTime.getTime()) / 1000
-      );
 
-      // Store total exam time and set half for first module
+      // Calculate total duration from server times
+      const totalSeconds = Math.floor(
+        (serverEndTime.getTime() - serverStartTime.getTime()) / 1000
+      );
+      const moduleDuration = Math.floor(totalSeconds / 2);
+
+      // Calculate elapsed time since exam started
+      const elapsedTotal = Math.floor(
+        (currentTime.getTime() - serverStartTime.getTime()) / 1000
+      );
+      const remainingTotal = Math.max(0, totalSeconds - elapsedTotal);
+
+      // Store in localStorage
+      setStoredTime(examId, "start_time", serverStartTime);
+      setStoredNumber(examId, "total_duration", totalSeconds);
+      setStoredNumber(examId, "module_duration", moduleDuration);
+
+      // Check if exam has already expired
+      if (remainingTotal <= 0) {
+        console.warn("Exam time has already expired");
+        handleSubmitExam();
+        return;
+      }
+
+      // Store Module A start time (use server start time or current time)
+      const moduleAStart =
+        getStoredTime(examId, "module_a_start_time") || currentTime;
+      if (!getStoredTime(examId, "module_a_start_time")) {
+        setStoredTime(examId, "module_a_start_time", moduleAStart);
+      }
+
+      // Calculate remaining time for Module A
+      const elapsedModuleA = Math.floor(
+        (currentTime.getTime() - moduleAStart.getTime()) / 1000
+      );
+      const remainingModuleA = Math.max(0, moduleDuration - elapsedModuleA);
+
+      // Use minimum of remaining module time and remaining total time
+      const timeToDisplay = Math.min(remainingModuleA, remainingTotal);
+
+      // Update state
+      setExamStartTime(serverStartTime);
+      setModuleAStartTime(moduleAStart);
       setTotalExamTime(totalSeconds);
-      const halfTime = Math.floor(totalSeconds / 2);
-      setTimeLeft(halfTime);
+      setTimeLeft(timeToDisplay);
       setExamStarted(true);
     },
     onError: (error) => {
       console.error("Start exam error:", error);
       // Fallback to 35 minutes total (17.5 minutes per module)
-      setTotalExamTime(35 * 60);
-      setTimeLeft(Math.floor((35 * 60) / 2));
+      const fallbackTotal = 35 * 60;
+      const fallbackModule = Math.floor(fallbackTotal / 2);
+      const now = new Date();
+
+      setStoredTime(examId, "start_time", now);
+      setStoredTime(examId, "module_a_start_time", now);
+      setStoredNumber(examId, "total_duration", fallbackTotal);
+      setStoredNumber(examId, "module_duration", fallbackModule);
+
+      setExamStartTime(now);
+      setModuleAStartTime(now);
+      setTotalExamTime(fallbackTotal);
+      setTimeLeft(fallbackModule);
       setExamStarted(true);
     },
   });
@@ -242,16 +359,114 @@ export default function DynamicExam() {
     }
   }, [examId]);
 
+  // Restore timer state from localStorage on mount/refresh
+  useEffect(() => {
+    if (!examStarted || !examId) return;
+
+    const storedExamStart = getStoredTime(examId, "start_time");
+    const storedTotalDuration = getStoredNumber(examId, "total_duration");
+    const storedModuleDuration = getStoredNumber(examId, "module_duration");
+
+    if (!storedExamStart || !storedTotalDuration || !storedModuleDuration)
+      return;
+
+    const now = new Date();
+    const elapsedTotal = Math.floor(
+      (now.getTime() - storedExamStart.getTime()) / 1000
+    );
+    const remainingTotal = Math.max(0, storedTotalDuration - elapsedTotal);
+
+    // Check if total exam time has expired
+    if (remainingTotal <= 0) {
+      console.warn("Exam time expired - auto submitting");
+      handleSubmitExam();
+      return;
+    }
+
+    // Determine which module we're in and calculate remaining time
+    const storedModuleBStart = getStoredTime(examId, "module_b_start_time");
+
+    if (storedModuleBStart && currentModule === "model_b") {
+      // We're in Module B
+      const elapsedModuleB = Math.floor(
+        (now.getTime() - storedModuleBStart.getTime()) / 1000
+      );
+      const remainingModuleB = Math.max(
+        0,
+        storedModuleDuration - elapsedModuleB
+      );
+      const timeToDisplay = Math.min(remainingModuleB, remainingTotal);
+      setTimeLeft(timeToDisplay);
+      setModuleBStartTime(storedModuleBStart);
+    } else {
+      // We're in Module A
+      const storedModuleAStart = getStoredTime(examId, "module_a_start_time");
+      if (storedModuleAStart) {
+        const elapsedModuleA = Math.floor(
+          (now.getTime() - storedModuleAStart.getTime()) / 1000
+        );
+        const remainingModuleA = Math.max(
+          0,
+          storedModuleDuration - elapsedModuleA
+        );
+        const timeToDisplay = Math.min(remainingModuleA, remainingTotal);
+        setTimeLeft(timeToDisplay);
+        setModuleAStartTime(storedModuleAStart);
+      }
+    }
+
+    setExamStartTime(storedExamStart);
+    setTotalExamTime(storedTotalDuration);
+  }, [examStarted, examId]);
+
   // TIMER LOGIC
   useEffect(() => {
     if (!timeLeft) return;
+
+    // Check if total exam time has expired (priority check)
+    if (examStartTime && totalExamTime) {
+      const now = new Date();
+      const elapsedTotal = Math.floor(
+        (now.getTime() - examStartTime.getTime()) / 1000
+      );
+
+      if (elapsedTotal >= totalExamTime) {
+        console.warn("Total exam time expired - auto submitting");
+        handleSubmitExam();
+        return;
+      }
+    }
+
+    // Check if current module time has expired
     if (timeLeft <= 0) {
       if (currentModule === "model_a") {
         // Time up for Module A - go directly to Module B
         setModuleALocked(true);
         setCurrentModule("model_b");
         setCurrent(0);
-        setTimeLeft(Math.floor(totalExamTime / 2)); // Reset timer for Module B
+
+        // Store Module B start time and calculate remaining time
+        const now = new Date();
+        setStoredTime(examId, "module_b_start_time", now);
+        setModuleBStartTime(now);
+
+        // Calculate remaining time for Module B
+        const moduleDuration =
+          getStoredNumber(examId, "module_duration") ||
+          Math.floor(totalExamTime / 2);
+        const storedExamStart =
+          getStoredTime(examId, "start_time") || examStartTime;
+
+        if (storedExamStart) {
+          const elapsedTotal = Math.floor(
+            (now.getTime() - storedExamStart.getTime()) / 1000
+          );
+          const remainingTotal = Math.max(0, totalExamTime - elapsedTotal);
+          const timeForModuleB = Math.min(moduleDuration, remainingTotal);
+          setTimeLeft(timeForModuleB);
+        } else {
+          setTimeLeft(moduleDuration);
+        }
       } else if (currentModule === "model_b") {
         // Time up for Module B - submit exam
         setModuleBLocked(true);
@@ -259,12 +474,13 @@ export default function DynamicExam() {
       }
       return;
     }
+
     const timer = setInterval(
       () => setTimeLeft((prev) => Math.max(0, prev! - 1)),
       1000
     );
     return () => clearInterval(timer);
-  }, [timeLeft, currentModule, totalExamTime]);
+  }, [timeLeft, currentModule, totalExamTime, examStartTime, examId]);
 
   const formatTime = (t: number) => {
     const m = Math.floor(t / 60);
@@ -290,6 +506,10 @@ export default function DynamicExam() {
       ...prepareAnswers(),
       has_cheated: false,
     };
+
+    // Clear localStorage for this exam
+    clearExamStorage(examId);
+
     submitExamMutation.mutate(payload);
   };
 
@@ -351,8 +571,30 @@ export default function DynamicExam() {
       setShowReview(false);
       setCurrentModule("model_b");
       setCurrent(0);
-      setTimeLeft(Math.floor(totalExamTime / 2)); // Reset timer to half for module B
       setModuleALocked(true);
+
+      // Store Module B start time and calculate remaining time
+      const now = new Date();
+      setStoredTime(examId, "module_b_start_time", now);
+      setModuleBStartTime(now);
+
+      // Calculate remaining time for Module B
+      const moduleDuration =
+        getStoredNumber(examId, "module_duration") ||
+        Math.floor(totalExamTime / 2);
+      const storedExamStart =
+        getStoredTime(examId, "start_time") || examStartTime;
+
+      if (storedExamStart) {
+        const elapsedTotal = Math.floor(
+          (now.getTime() - storedExamStart.getTime()) / 1000
+        );
+        const remainingTotal = Math.max(0, totalExamTime - elapsedTotal);
+        const timeForModuleB = Math.min(moduleDuration, remainingTotal);
+        setTimeLeft(timeForModuleB);
+      } else {
+        setTimeLeft(moduleDuration);
+      }
     } else if (isEndOfModuleB && !showReview) {
       setShowReview(true);
       setCurrentModule("review_b");
