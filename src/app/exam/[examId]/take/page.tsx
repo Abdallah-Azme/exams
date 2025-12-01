@@ -165,7 +165,7 @@ export default function DynamicExam() {
       return apiClient.post("/user-exams/submit-all-answers", payload);
     },
     onSuccess: () => {
-      router.push("/profile");
+      router.replace("/profile");
     },
   });
 
