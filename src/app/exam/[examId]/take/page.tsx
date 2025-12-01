@@ -262,9 +262,17 @@ export default function DynamicExam() {
       const currentTime = new Date();
 
       // Calculate total duration from server times
-      const totalSeconds = Math.floor(
+      let totalSeconds = Math.floor(
         (serverEndTime.getTime() - serverStartTime.getTime()) / 1000
       );
+
+      // 🧪 TEST MODE: Override duration to 10 seconds for testing
+      const TEST_MODE = false; // Set to false for production
+      if (TEST_MODE) {
+        console.warn("⚠️ TEST MODE ENABLED - Exam duration set to 10 seconds");
+        totalSeconds = 10;
+      }
+
       const moduleDuration = Math.floor(totalSeconds / 2);
 
       // Calculate elapsed time since exam started
@@ -278,10 +286,45 @@ export default function DynamicExam() {
       setStoredNumber(examId, "total_duration", totalSeconds);
       setStoredNumber(examId, "module_duration", moduleDuration);
 
-      // Check if exam has already expired
+      // CRITICAL: Check if exam has already expired BEFORE setting any state
+      // This handles cases where user starts late or the server returns an expired exam
       if (remainingTotal <= 0) {
-        console.warn("Exam time has already expired");
-        handleSubmitExam();
+        console.warn("Exam time has already expired - submitting immediately");
+        // Set userExamId first so handleSubmitExam can use it
+        const userExamIdValue = response.data.user_exam.id;
+        setUserExamId(userExamIdValue);
+        // Use setTimeout to ensure state is updated before submission
+        setTimeout(() => {
+          const allQuestions = [
+            ...(response.data.user_exam.models.model_a.questions || []),
+            ...(response.data.user_exam.models.model_b.questions || []),
+          ];
+          const answers = allQuestions
+            .filter((q) => selectedRef.current[q.id])
+            .map((q) => {
+              const answer = selectedRef.current[q.id];
+              if (q.type === "mcq") {
+                return {
+                  user_exam_question_id: q.id,
+                  answer_id: parseInt(answer),
+                };
+              } else {
+                return {
+                  user_exam_question_id: q.id,
+                  answer_text: answer,
+                };
+              }
+            });
+
+          const payload = {
+            user_exam_id: userExamIdValue,
+            has_cheated: false,
+            answers,
+          };
+
+          clearExamStorage(examId);
+          submitExamMutation.mutate(payload);
+        }, 0);
         return;
       }
 
@@ -419,68 +462,100 @@ export default function DynamicExam() {
     setTotalExamTime(storedTotalDuration);
   }, [examStarted, examId]);
 
-  // TIMER LOGIC
+  // TIMER LOGIC - Refactored for reliability
   useEffect(() => {
-    if (!timeLeft) return;
+    if (!examStarted || !examStartTime || !totalExamTime) return;
 
-    // Check if total exam time has expired (priority check)
-    if (examStartTime && totalExamTime) {
+    // Calculate and update time remaining
+    const updateTimer = () => {
       const now = new Date();
       const elapsedTotal = Math.floor(
         (now.getTime() - examStartTime.getTime()) / 1000
       );
 
+      // Check if total exam time has expired (priority check)
       if (elapsedTotal >= totalExamTime) {
         console.warn("Total exam time expired - auto submitting");
+        setTimeLeft(0);
         handleSubmitExam();
-        return;
+        return false; // Stop timer
       }
-    }
 
-    // Check if current module time has expired
-    if (timeLeft <= 0) {
+      const remainingTotal = Math.max(0, totalExamTime - elapsedTotal);
+      const moduleDuration = Math.floor(totalExamTime / 2);
+
+      // Calculate remaining time for current module
       if (currentModule === "model_a") {
-        // Time up for Module A - go directly to Module B
-        setModuleALocked(true);
-        setCurrentModule("model_b");
-        setCurrent(0);
+        const moduleAStart = moduleAStartTime || examStartTime;
+        const elapsedModuleA = Math.floor(
+          (now.getTime() - moduleAStart.getTime()) / 1000
+        );
+        const remainingModuleA = Math.max(0, moduleDuration - elapsedModuleA);
 
-        // Store Module B start time and calculate remaining time
-        const now = new Date();
-        setStoredTime(examId, "module_b_start_time", now);
-        setModuleBStartTime(now);
+        // Check if Module A time has expired
+        if (remainingModuleA <= 0 && !moduleALocked) {
+          setModuleALocked(true);
+          setCurrentModule("model_b");
+          setCurrent(0);
 
-        // Calculate remaining time for Module B
-        const moduleDuration =
-          getStoredNumber(examId, "module_duration") ||
-          Math.floor(totalExamTime / 2);
-        const storedExamStart =
-          getStoredTime(examId, "start_time") || examStartTime;
+          // Store Module B start time
+          const moduleBStart = new Date();
+          setStoredTime(examId, "module_b_start_time", moduleBStart);
+          setModuleBStartTime(moduleBStart);
 
-        if (storedExamStart) {
-          const elapsedTotal = Math.floor(
-            (now.getTime() - storedExamStart.getTime()) / 1000
-          );
-          const remainingTotal = Math.max(0, totalExamTime - elapsedTotal);
+          // Set time for Module B
           const timeForModuleB = Math.min(moduleDuration, remainingTotal);
           setTimeLeft(timeForModuleB);
-        } else {
-          setTimeLeft(moduleDuration);
+          return true; // Continue timer
         }
-      } else if (currentModule === "model_b") {
-        // Time up for Module B - submit exam
-        setModuleBLocked(true);
-        handleSubmitExam();
-      }
-      return;
-    }
 
-    const timer = setInterval(
-      () => setTimeLeft((prev) => Math.max(0, prev! - 1)),
-      1000
-    );
+        const timeToDisplay = Math.min(remainingModuleA, remainingTotal);
+        setTimeLeft(timeToDisplay);
+      } else if (currentModule === "model_b") {
+        const moduleBStart = moduleBStartTime || examStartTime;
+        const elapsedModuleB = Math.floor(
+          (now.getTime() - moduleBStart.getTime()) / 1000
+        );
+        const remainingModuleB = Math.max(0, moduleDuration - elapsedModuleB);
+
+        // Check if Module B time has expired
+        if (remainingModuleB <= 0 && !moduleBLocked) {
+          setModuleBLocked(true);
+          setTimeLeft(0);
+          handleSubmitExam();
+          return false; // Stop timer
+        }
+
+        const timeToDisplay = Math.min(remainingModuleB, remainingTotal);
+        setTimeLeft(timeToDisplay);
+      }
+
+      return true; // Continue timer
+    };
+
+    // Initial update
+    updateTimer();
+
+    // Set up interval to update every second
+    const timer = setInterval(() => {
+      const shouldContinue = updateTimer();
+      if (!shouldContinue) {
+        clearInterval(timer);
+      }
+    }, 1000);
+
     return () => clearInterval(timer);
-  }, [timeLeft, currentModule, totalExamTime, examStartTime, examId]);
+  }, [
+    examStarted,
+    examStartTime,
+    totalExamTime,
+    currentModule,
+    moduleAStartTime,
+    moduleBStartTime,
+    moduleALocked,
+    moduleBLocked,
+    examId,
+  ]);
 
   const formatTime = (t: number) => {
     const m = Math.floor(t / 60);
