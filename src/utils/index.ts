@@ -17,6 +17,36 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Reads the auth token available to client-side JS.
+ * Falls back to the httpOnly cookie via server action when on the server.
+ */
+export function getClientToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const cookies = document.cookie.split(";").map((c) => c.trim());
+  const match = cookies.find((row) => row.startsWith("client_token="));
+  return match ? decodeURIComponent(match.substring("client_token=".length)) : null;
+}
+
+/**
+ * Writes the token to a client-accessible cookie so apiClient can attach it
+ * as a Bearer header on every request. Called right after a successful login.
+ */
+export function setClientToken(token: string): void {
+  if (typeof window === "undefined") return;
+  const maxAge = 60 * 60 * 24 * 7; // 7 days
+  const secure = location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `client_token=${encodeURIComponent(token)}; Max-Age=${maxAge}; Path=/${secure}; SameSite=Lax`;
+}
+
+/**
+ * Removes the client-accessible token cookie (called on logout).
+ */
+export function clearClientToken(): void {
+  if (typeof window === "undefined") return;
+  document.cookie = "client_token=; Max-Age=0; Path=/";
+}
+
 export const api = ofetch.create({
   baseURL:
     process.env.NEXT_PUBLIC_API_URL || "https://exams.tsd-education.com/api",
@@ -41,8 +71,16 @@ export const api = ofetch.create({
 
   async onRequest({ options }) {
     try {
-      // ✅ Always fetch token securely via server action
-      const token = await getAuthToken();
+      let token: string | null = null;
+
+      if (typeof window === "undefined") {
+        // Server-side: use the Next.js server action to read the HttpOnly cookie
+        token = await getAuthToken();
+      } else {
+        // Client-side: read the non-HttpOnly client_token cookie directly
+        token = getClientToken();
+      }
+
       if (token) {
         options.headers = new Headers(options.headers as HeadersInit);
         options.headers.set("Authorization", `Bearer ${token}`);

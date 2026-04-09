@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/card"
 
 import { toast } from "sonner"
-import { apiClient } from "@/src/utils"
+import { apiClient, setClientToken } from "@/src/utils"
 import { useStore } from "@/lib/store"
 import Link from "next/link"
 import { setAuthCookies } from "@/src/utils/cookies"
@@ -85,6 +85,7 @@ export default function SigninPage() {
       setUser(data?.data?.student)
       const token = data.data.token
       await setAuthCookies(token)
+      setClientToken(token) // Set immediately on client
       toast.success("Welcome back! You have signed in successfully.")
       router.push("/")
     },
