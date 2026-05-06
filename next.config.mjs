@@ -6,7 +6,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  basePath: "/dr-tarek-salah-exam",
 };
 
 export default nextConfig;

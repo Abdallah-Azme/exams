@@ -47,6 +47,7 @@ async function fetchUserExamsStats(): Promise<ExamData[]> {
   return response.data;
 }
 
+
 export default function ProfilePage() {
   const router = useRouter();
   const user = useStore((state) => state.user);
@@ -61,13 +62,15 @@ export default function ProfilePage() {
     queryFn: fetchUserExamsStats,
   });
 
+  console.log({ exams });
+
   const totalExams = exams.length;
   const averageScore =
     exams.length > 0
       ? (
-          exams.reduce((sum, exam) => sum + parseFloat(exam.percentage), 0) /
-          exams.length
-        ).toFixed(1)
+        exams.reduce((sum, exam) => sum + parseFloat(exam.percentage), 0) /
+        exams.length
+      ).toFixed(1)
       : "0.0";
   const lastExam = exams[0];
 
@@ -210,7 +213,7 @@ export default function ProfilePage() {
                     </div>
 
                     {/* Score Section */}
-                    <CardContent className="p-6 bg-gradient-to-b from-gray-50 to-white">
+                    <CardContent className="p-6 bg-gradient-to-b from-gray-50 to-white flex flex-col items-center">
                       <div className="text-center mb-6">
                         <p className="text-sm font-semibold text-gray-600 mb-2">
                           YOUR TOTAL SCORE
@@ -219,6 +222,16 @@ export default function ProfilePage() {
                           {exam.total_score}
                         </p>
                       </div>
+                      <Button
+                        className="w-full mt-auto"
+                        onClick={() =>
+                          router.push(
+                            `/exam/${exam.exam_id}/preview/${exam.user_exam_id}`
+                          )
+                        }
+                      >
+                        Show Details
+                      </Button>
                     </CardContent>
                   </Card>
                 );
