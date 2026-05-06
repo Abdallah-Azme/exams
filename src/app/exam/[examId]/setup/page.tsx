@@ -101,6 +101,29 @@ export default function ExamSetupPage() {
     enabled: !!examId,
   });
 
+  const checkPasswordMutation = useMutation({
+    mutationFn: async (pwd: string) => {
+      const res = await apiClient.post("/exams/check-password", {
+        exam_id: Number(examId),
+        password: pwd,
+      });
+      return res; // ofetch returns the JSON payload directly
+    },
+    onSuccess: (responseData) => {
+      if (responseData?.data === true || responseData === true) {
+        // Set an auth flag so the user can't bypass this page by typing the URL directly
+        sessionStorage.setItem(`exam_auth_${examId}`, "true");
+        router.push(`/exam/${examId}/take`);
+      } else {
+        // Overriding the backend message ("false") with a more suitable message
+        toast.error("Invalid Exam Password. Please check with your administrator.");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "An error occurred while verifying the password.");
+    },
+  });
+
   if (isLoading || isRulesLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -130,28 +153,6 @@ export default function ExamSetupPage() {
     ) || 0;
   const totalMarks = modelAMarks + modelBMarks;
 
-  const checkPasswordMutation = useMutation({
-    mutationFn: async (pwd: string) => {
-      const res = await apiClient.post("/exams/check-password", {
-        exam_id: Number(examId),
-        password: pwd,
-      });
-      return res; // ofetch returns the JSON payload directly
-    },
-    onSuccess: (responseData) => {
-      if (responseData?.data === true || responseData === true) {
-        // Set an auth flag so the user can't bypass this page by typing the URL directly
-        sessionStorage.setItem(`exam_auth_${examId}`, "true");
-        router.push(`/exam/${examId}/take`);
-      } else {
-        // Overriding the backend message ("false") with a more suitable message
-        toast.error("Invalid Exam Password. Please check with your administrator.");
-      }
-    },
-    onError: (err: any) => {
-      toast.error(err?.message || "An error occurred while verifying the password.");
-    },
-  });
 
   const handleStartExam = () => {
     // If the user typed a password or if it's required, we check it
