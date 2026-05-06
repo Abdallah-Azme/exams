@@ -9,9 +9,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import CheatingAlerts from "@/src/modules/exams/ui/cheating-alerts";
 import { apiClient } from "@/src/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   ArrowRight,
   BookOpen,
@@ -19,6 +21,8 @@ import {
   Lock,
   Trophy,
   AlertCircle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -43,6 +47,7 @@ type Question = {
 };
 
 type ExamDetails = {
+  password?: string;
   model_a: {
     name: string;
     questions: Question[];
@@ -68,6 +73,9 @@ export default function ExamSetupPage() {
   const examId = params.examId as string;
 
   const [countdown, setCountdown] = useState(5);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -113,10 +121,6 @@ export default function ExamSetupPage() {
 
   const examData: ExamDetails = data?.data?.data || {};
 
-  const modelAQuestions = examData.model_a?.questions?.length || 0;
-  const modelBQuestions = Object.keys(examData.model_b?.questions || {}).length;
-  const totalQuestions = modelAQuestions + modelBQuestions;
-
   const modelAMarks =
     examData.model_a?.questions?.reduce((sum, q) => sum + q.marks, 0) || 0;
   const modelBMarks =
@@ -126,8 +130,37 @@ export default function ExamSetupPage() {
     ) || 0;
   const totalMarks = modelAMarks + modelBMarks;
 
+  const checkPasswordMutation = useMutation({
+    mutationFn: async (pwd: string) => {
+      const res = await apiClient.post("/exams/check-password", {
+        exam_id: Number(examId),
+        password: pwd,
+      });
+      return res; // ofetch returns the JSON payload directly
+    },
+    onSuccess: (responseData) => {
+      if (responseData?.data === true || responseData === true) {
+        // Set an auth flag so the user can't bypass this page by typing the URL directly
+        sessionStorage.setItem(`exam_auth_${examId}`, "true");
+        router.push(`/exam/${examId}/take`);
+      } else {
+        // Overriding the backend message ("false") with a more suitable message
+        toast.error("Invalid Exam Password. Please check with your administrator.");
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || "An error occurred while verifying the password.");
+    },
+  });
+
   const handleStartExam = () => {
-    router.push(`/exam/${examId}/take`);
+    // If the user typed a password or if it's required, we check it
+    if (!password) {
+      toast.error("Please enter the exam password to begin.");
+      return;
+    }
+
+    checkPasswordMutation.mutate(password);
   };
 
   return (
@@ -240,16 +273,52 @@ export default function ExamSetupPage() {
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-600 text-center max-w-md">
-                  You're all set! Click the button below to begin your exam.
-                </p>
+                <div className="space-y-2 text-center max-w-md w-full">
+                  <h3 className="text-xl font-semibold text-gray-900">Secure Exam Area</h3>
+                  <p className="text-sm text-gray-500">
+                    This exam is protected. Please enter the password provided by your administrator to begin.
+                  </p>
+                </div>
+
+                <div className="flex flex-col items-center gap-3 w-full max-w-sm mt-4">
+                  <div className="relative w-full group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <Lock className="h-5 w-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                    </div>
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Enter exam password"
+                      value={password}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        setPasswordError("");
+                      }}
+                      className="pl-12 pr-12 py-6 text-lg rounded-2xl border-gray-200 focus-visible:ring-blue-500 focus-visible:ring-2 shadow-sm transition-all"
+                      disabled={checkPasswordMutation.isPending}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {passwordError && (
+                    <p className="text-sm font-medium text-red-600 bg-red-50 px-4 py-1.5 rounded-full">
+                      {passwordError}
+                    </p>
+                  )}
+                </div>
+
                 <Button
                   size="lg"
                   className="gap-2 px-12 py-6 text-lg font-semibold rounded-full bg-blue-600 hover:bg-blue-700"
                   onClick={handleStartExam}
+                  disabled={checkPasswordMutation.isPending}
                 >
-                  Start Exam
-                  <ArrowRight className="h-5 w-5" />
+                  {checkPasswordMutation.isPending ? "Verifying..." : "Start Exam"}
+                  {!checkPasswordMutation.isPending && <ArrowRight className="h-5 w-5" />}
                 </Button>
               </>
             )}

@@ -151,6 +151,16 @@ export default function DynamicExam() {
   const [moduleAStartTime, setModuleAStartTime] = useState<Date | null>(null);
   const [moduleBStartTime, setModuleBStartTime] = useState<Date | null>(null);
 
+  // Protect the exam route from direct access
+  useEffect(() => {
+    if (typeof window !== "undefined" && examId) {
+      const isAuth = sessionStorage.getItem(`exam_auth_${examId}`);
+      if (!isAuth) {
+        router.replace(`/exam/${examId}/setup`);
+      }
+    }
+  }, [examId, router]);
+
   // Add a ref to store the latest selected answers
   const selectedRef = useRef<Record<number, string>>({});
 
